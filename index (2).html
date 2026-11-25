@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Timer conducteur VINCI</title>
+<style>
+:root{--bg:#0d0f12;--fg:#fff;--mut:#8a919c;--btn:#1f2630;--red:#ff2d2d;--cur:#26303c;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:light){:root:not([data-theme="dark"]){--bg:#f3f4f6;--fg:#111;--mut:#5b6470;--btn:#e1e5ea;--cur:#d3dae3}}
+:root[data-theme="dark"]{--bg:#0d0f12;--fg:#fff}
+html,body{margin:0;min-height:100%}
+body{background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;display:flex;flex-direction:column;align-items:center;gap:14px;padding:24px 12px;transition:background .2s}
+body.over{background:#2a0a0a}
+#t{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:min(22vw,160px);font-weight:700;letter-spacing:.02em}
+body.over #t{color:var(--red)}
+#s{color:var(--mut);font-size:14px;text-align:center;min-height:20px}
+.row{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+button{background:var(--btn);color:var(--fg);border:0;border-radius:12px;padding:14px 20px;font-size:16px;font-weight:600;cursor:pointer}
+#v{background:#1d9e4b;color:#fff}
+body.over #v{background:var(--red)}
+</style>
+</head>
+<body>
+<div id="t">45:00</div>
+<div id="s">Prêt</div>
+<div class="row"><button id="b" aria-label="Retour">←</button><button id="v">Valider</button><button id="k" aria-label="Passer">→</button></div>
+<div class="row"><button id="r">Reset</button></div>
+<script>
+var SEQ=[
+["Entrée en salle - Accueil café + badges",2700],
+["Lancement / Montée sur scène",30],
+["Mot d’accueil, consignes sécurité, intro",300],
+["Interaction salle - créez votre réseau",120],
+["Transition - Intro VINCI c’est quoi ?",30],
+["FILM 1 - Comment VINCI est devenu VINCI",960],
+["Chiffres clés du Groupe",300],
+["Transition - Et en Centre-Est ?",60],
+["FILM 2 - VINCI en Centre-Est",240],
+["Infos clés VINCI en Centre-Est",360],
+["Interaction salle - 2 questions Vrai/Faux",240],
+["Transition - Intro performance sociale et sociétale",30],
+["Interaction salle - quiz promesse employeur",300],
+["AXE 1 - Employeur responsable - qui protège",240],
+["FILM 3 - Santé sécurité + appel Lionel",120],
+["Employeur responsable - qui protège (Club Pivot Prévention)",180],
+["Employeur responsable - qui favorise le développement",120],
+["FILM 4 - Employeur responsable",180],
+["Employeur responsable - qui rassemble",120],
+["Appel sur scène de Françoise",30],
+["Employeur responsable - qui rassemble (Trajeo’h)",180],
+["Appel sur scène de Margaux, Marie, Alicia et Émilie",30],
+["AXE 2 - Entreprise responsable - employabilité durable",240],
+["Entreprise responsable - employabilité durable (ViE)",180],
+["Entreprise responsable - engagement citoyen",240],
+["Conclusion de la séquence",60],
+["FILM 5 - Culture RH",120],
+["Transition - Intro performance environnementale / Appel Isabelle",30],
+["Ambition environnementale de VINCI",300],
+["Appel sur scène de Cécile, Dominique, Marie",30],
+["Présentation du Club Pivot environnement",150],
+["Slideshow en musique",30],
+["AXE 1 CLIMAT",270],
+["Appel sur scène d’Hélène, Zoé, Lionel",30],
+["AXE 2 ÉCO CIRCULAIRE",90],
+["FILM 6 - BACKIN",136],
+["Backin",150],
+["AXE 3 MILIEUX NATURELS",450],
+["Conclusion séquence environnement",150],
+["Annonce pause déjeuner + village innovation IA",30],
+["PAUSE DÉJEUNER + Village innovation IA",5400],
+["Retour en salle",900],
+["Générique",30],
+["Transition - Intro performance économique",30],
+["FILM 7 - Grégoire Thibault",180],
+["Appel sur scène des 4 intervenants",30],
+["Comment VINCI contribue à l’émergence d’un territoire ?",300],
+["Comment VINCI participe au cycle de vie d’une infrastructure",300],
+["Mégatendance besoins électriques : le nucléaire",180],
+["FILM 8 - Nucléaire",150],
+["Transition - Et à l’échelle du Groupe ?",30],
+["FILM 9 - Thierry Mirville",180],
+["Transition - Intro stratégie et perspectives",30],
+["FILM 10 - Christophe Ferrer",180],
+["Appel et montée sur scène Pierre Anjolras",30],
+["Stratégie, perspectives du Groupe",1500],
+["Interaction salle / Q&A",2700],
+["Conclusion journée + photo de groupe",120]];
+
+var KEY="vinci-timer-v1",running=false,done=false,idx=-1,startTs=0,wl=null;
+var t=document.getElementById("t"),s=document.getElementById("s");
+
+function pad(n){return (n<10?"0":"")+n}
+function fmt(x){var h=Math.floor(x/3600),m=Math.floor(x%3600/60),sec=x%60;return (h>0?pad(h)+":":"")+pad(m)+":"+pad(sec)}
+function show(txt,red){t.textContent=txt;document.title=txt+" · Timer VINCI";document.body.classList.toggle("over",red)}
+function save(){try{localStorage.setItem(KEY,JSON.stringify({idx:idx,startTs:startTs,running:running,done:done}))}catch(e){}}
+function keepAwake(){try{if(navigator.wakeLock&&!wl){navigator.wakeLock.request("screen").then(function(x){wl=x;wl.addEventListener("release",function(){wl=null})}).catch(function(){})}}catch(e){}}
+
+function label(){s.textContent="Séquence "+(idx+1)+"/"+SEQ.length+" · "+SEQ[idx][0]}
+function begin(i){idx=i;running=true;done=false;startTs=Date.now();label();show(fmt(SEQ[i][1]),false);save();keepAwake()}
+function valider(){
+ if(idx>=SEQ.length-1&&idx>=0){running=false;done=true;s.textContent="Conducteur terminé";show("FIN",false);save();return}
+ begin(idx+1)}
+function back(){if(idx<0)return;if(done){begin(idx)}else{begin(Math.max(0,idx-1))}}
+function reset(){
+ if(running&&!confirm("Remettre le conducteur à zéro ?"))return;
+ running=false;done=false;idx=-1;s.textContent="Prêt";show(fmt(SEQ[0][1]),false);save()}
+function tick(){
+ if(running){
+  var rem=SEQ[idx][1]-(Date.now()-startTs)/1000;
+  if(rem>=0)show(fmt(Math.ceil(rem)),false);
+  else show("-"+fmt(Math.floor(-rem)),true)}
+ requestAnimationFrame(tick)}
+
+document.getElementById("v").onclick=valider;
+document.getElementById("k").onclick=valider;
+document.getElementById("b").onclick=back;
+document.getElementById("r").onclick=reset;
+document.addEventListener("keydown",function(e){
+ if(e.code==="Space"||e.code==="Enter"){e.preventDefault();valider()}
+ else if(e.code==="ArrowRight")valider();else if(e.code==="ArrowLeft")back()});
+document.addEventListener("visibilitychange",function(){if(!document.hidden&&running)keepAwake()});
+
+// Restauration de l’état après rechargement
+try{
+ var o=JSON.parse(localStorage.getItem(KEY));
+ if(o&&o.idx>=0&&o.idx<SEQ.length){idx=o.idx;startTs=o.startTs;running=!!o.running;done=!!o.done;label();
+  if(done){s.textContent="Conducteur terminé";show("FIN",false)}
+  else if(!running)show(fmt(SEQ[idx][1]),false)}
+ else show(fmt(SEQ[0][1]),false)
+}catch(e){show(fmt(SEQ[0][1]),false)}
+tick();
+</script>
+</body>
+</html>
